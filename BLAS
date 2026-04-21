@@ -1,0 +1,158 @@
+#include <iostream>
+#include <vector>
+#include <ctime>
+#include <cmath>
+#include <cstdlib>
+//Используется библиотека BLas
+using namespace std;
+
+const int N = 4096;
+
+// Функция замера времени
+double get_time() {
+    return clock() / (double)CLOCKS_PER_SEC;
+}
+
+// Генерация случайной матрицы
+void generate_matrix(vector<float>& mat) {
+    for (int i = 0; i < N * N; i++) {
+        mat[i] = (float)(rand() % 200 - 100) / 10.0f;
+    }
+}
+
+// ВАРИАНТ 2: Вызов BLAS (библиотечная функция)
+extern "C" {
+    void cblas_sgemm(const int* Order, const int* TransA, const int* TransB,
+                     const int* M, const int* N, const int* K,
+                     const float* alpha, const float* A, const int* lda,
+                     const float* B, const int* ldb,
+                     const float* beta, float* C, const int* ldc);
+}
+
+void multiply_blas(const vector<float>& A, const vector<float>& B, vector<float>& C) {
+    int order = 101; // CblasRowMajor
+    int trans = 111; // CblasNoTrans
+    int n = N;
+    float alpha = 1.0f;
+    float beta = 0.0f;
+    int lda = N;
+    int ldb = N;
+    int ldc = N;
+
+    cblas_sgemm(&order, &trans, &trans, &n, &n, &n,
+                &alpha, A.data(), &lda, B.data(), &ldb,
+                &beta, C.data(), &ldc);
+}
+
+// ВАРИАНТ 3: Оптимизированный алгоритм (поменяли порядок циклов)
+void multiply_optimized(const vector<float>& A, const vector<float>& B, vector<float>& C) {
+    // Обнуляем результат
+    for (int i = 0; i < N * N; i++) {
+        C[i] = 0;
+    }
+
+    // Меняем порядок циклов: i,k,j вместо i,j,k
+    // Это улучшает использование кэша
+    for (int i = 0; i < N; i++) {
+        for (int k = 0; k < N; k++) {
+            float a = A[i * N + k];
+            if (a == 0) continue; // пропускаем нули
+
+            for (int j = 0; j < N; j++) {
+                C[i * N + j] = C[i * N + j] + a * B[k * N + j];
+            }
+        }
+    }
+}
+
+// Функция проверки правильности
+float check_result(const vector<float>& C1, const vector<float>& C2) {
+    float max_diff = 0;
+    for (int i = 0; i < N * N; i++) {
+        float diff = C1[i] - C2[i];
+        if (diff < 0) diff = -diff;
+        if (diff > max_diff) {
+            max_diff = diff;
+        }
+    }
+    return max_diff;
+}
+
+int main() {
+   
+    cout << "Сравнение вариантов 2 и 3" << endl;
+    cout << "Размер матриц: " << N << " x " << N << endl;
+    cout << "----------------" << endl << endl;
+
+    //Выделяем память
+    vector<float> A(N * N);
+    vector<float> B(N * N);
+    vector<float> C_blas(N * N);    // для варианта 2
+    vector<float> C_optimized(N * N); // для варианта 3
+
+    // Генерируем случайные матрицы
+    cout << "Генерация случайных матриц..." << endl;
+    srand(12345);
+    generate_matrix(A);
+    generate_matrix(B);
+    cout << "Готово!" << endl << endl;
+
+    //Количество операций (для подсчета MFlops)
+    double operations = 2.0 * N * N * N;
+
+    //ВАРИАНТ 2 (BLAS)
+    cout << "ВАРИАНТ 2: Библиотека BLAS" << endl;
+    double start = get_time();
+    multiply_blas(A, B, C_blas);
+    double end = get_time();
+    double time_blas = end - start;
+    double mflops_blas = operations / time_blas / 1000000.0;
+
+    cout << "Время: " << time_blas << " секунд" << endl;
+    cout << "Производительность: " << mflops_blas << " MFlops" << endl << endl;
+
+    //ВАРИАНТ 3 (Оптимизированный)
+    cout << "ВАРИАНТ 3: Мой оптимизированный алгоритм" << endl;
+    start = get_time();
+    multiply_optimized(A, B, C_optimized);
+    end = get_time();
+    double time_optimized = end - start;
+    double mflops_optimized = operations / time_optimized / 1000000.0;
+
+    cout << "Время: " << time_optimized << " секунд" << endl;
+    cout << "Производительность: " << mflops_optimized << " MFlops" << endl << endl;
+
+    //ПРОВЕРКА ПРАВИЛЬНОСТИ
+    cout << "=== Проверка правильности ===" << endl;
+    float error = check_result(C_optimized, C_blas);
+    cout << "Максимальное отличие от BLAS: " << error << endl << endl;
+
+    // СРАВНЕНИЕ
+    cout << "Сравнение производительности" << endl;
+    cout << "BLAS (эталон):            " << mflops_blas << " MFlops" << endl;
+    cout << "Мой оптимизированный:     " << mflops_optimized << " MFlops";
+    cout << " (" << (mflops_optimized / mflops_blas * 100) << "% от BLAS)" << endl;
+
+    // Проверяем условие задания
+    if (mflops_optimized >= 0.3 * mflops_blas) {
+        cout << endl << "✓ УСЛОВИЕ ВЫПОЛНЕНО: Мой алгоритм достиг 30% от BLAS!" << endl;
+    } else {
+        cout << endl << "✗ УСЛОВИЕ НЕ ВЫПОЛНЕНО: Мой алгоритм медленнее 30% от BLAS" << endl;
+        cout << "Нужно добавить больше оптимизаций (блоки, SIMD, OpenMP)" << endl;
+    }
+
+    // Выводим немного результатов для проверки
+    cout << endl << "Первые 5 элементов результата BLAS: ";
+    for (int i = 0; i < 5; i++) {
+        cout << C_blas[i] << " ";
+    }
+    cout << endl;
+
+    cout << "Первые 5 элементов моего результата: ";
+    for (int i = 0; i < 5; i++) {
+        cout << C_optimized[i] << " ";
+    }
+    cout << endl;
+    printf("Лысенко Владимир Александрович 090301-Пова-о25");
+    return 0;
+}
