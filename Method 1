@@ -1,0 +1,84 @@
+#include <iostream>
+#include <vector>
+#include <ctime>
+#include <cstdlib>
+//Вариант выполнения программы первым способом(долгий)
+using namespace std;
+
+const int N = 1024; // Для N=4096 будет очень долго, лучше взять 512 или 1024
+
+// Функция замера времени
+double get_time() {
+    return clock() / (double)CLOCKS_PER_SEC;
+}
+
+// Генерация случайной матрицы
+void generate_matrix(vector<float>& mat) {
+    for (int i = 0; i < N * N; i++) {
+        mat[i] = (float)(rand() % 200 - 100) / 10.0f;
+    }
+}
+
+// НАИВНЫЙ АЛГОРИТМ (три вложенных цикла)
+void multiply_naive(const vector<float>& A, const vector<float>& B, vector<float>& C) {
+    // Обнуляем результат
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < N; j++) {
+            C[i * N + j] = 0;
+        }
+    }
+
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < N; j++) {
+            float sum = 0;
+            for (int k = 0; k < N; k++) {
+                sum = sum + A[i * N + k] * B[k * N + j];
+            }
+            C[i * N + j] = sum;
+        }
+    }
+}
+
+int main() {
+    cout << "ВАРИАНТ 1: Наивное перемножение матриц" << endl;
+    cout << "Размер: " << N << " x " << N << endl;
+
+
+    // Выделяем память
+    vector<float> A(N * N);
+    vector<float> B(N * N);
+    vector<float> C(N * N);
+
+    // Генерируем случайные матрицы
+    cout << "Генерация случайных матриц..." << endl;
+    srand(12345);
+    generate_matrix(A);
+    generate_matrix(B);
+    cout << "Готово!" << endl << endl;
+
+    // Выполняем умножение
+    cout << "Умножение матриц..." << endl;
+    double start = get_time();
+    multiply_naive(A, B, C);
+    double end = get_time();
+    double time_seconds = end - start;
+
+    // Считаем производительность
+    double operations = 2.0 * N * N * N; // 2 * n^3 операций
+    double mflops = operations / time_seconds / 1000000.0;
+
+    // Выводим результат
+    cout << "Время выполнения: " << time_seconds << " секунд" << endl;
+    cout << "Количество операций: " << operations << endl;
+    cout << "Производительность: " << mflops << " MFlops" << endl;
+
+    // Выводим первые несколько элементов для проверки
+    cout << endl << "Первые 5 элементов результата: " << endl;
+    for (int i = 0; i < 5 && i < N * N; i++) {
+        cout << C[i] << " ";
+    }
+    cout << endl;
+    printf("Лысенко Владимир Александрович 090301-Пова-о25");
+    return 0;
+
+}
